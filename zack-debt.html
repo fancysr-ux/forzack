@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zack 旅費欠款與還款追蹤</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --line:#e7e6e2; --line-soft:#f1f0ec;
+    --text:#0b0b0b; --text-2:#52514e; --text-3:#8a8984;
+    --s1:#2a78d6; --s2:#eb6834; --good:#008300; --danger:#c8352f;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    font-size:14px;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--text-2);margin:0 0 24px}
+  h2{font-size:16px;margin:0;font-weight:650}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .tile{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .tile .k{color:var(--text-2);font-size:13px}
+  .tile .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .tile .n{color:var(--text-3);font-size:12px;margin-top:2px}
+  .card{border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:20px}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 6px;border-bottom:1px solid var(--line-soft);text-align:left;vertical-align:middle}
+  th{color:var(--text-2);font-weight:500;font-size:12px}
+  td.num,th.num{text-align:right}
+  tfoot td{font-weight:650;border-top:1px solid var(--line);border-bottom:none}
+  .tbl-scroll{max-height:420px;overflow:auto}
+  input,select{font:inherit;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 8px;background:#fff;min-width:0}
+  input:focus{outline:2px solid #b7d3f6;border-color:var(--s1)}
+  input.inline{border-color:transparent;background:transparent;width:100%;padding:4px 6px}
+  input.inline:hover{border-color:var(--line)}
+  input.inline.num{text-align:right}
+  button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;cursor:pointer;color:var(--text)}
+  button:hover{background:#f6f6f4}
+  button.primary{background:var(--s1);border-color:var(--s1);color:#fff}
+  button.primary:hover{background:#256abf}
+  button.del{border:none;background:none;color:var(--text-3);padding:4px 8px;font-size:16px;line-height:1}
+  button.del:hover{color:var(--danger);background:#fbeeee}
+  .addrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .addrow input{flex:1}
+  .addrow input.amt{max-width:120px}
+  .addrow input[type=date]{max-width:150px}
+  .plan{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+  .plan label{display:flex;flex-direction:column;gap:4px;color:var(--text-2);font-size:12px}
+  .plan input{width:140px}
+  .scen{display:flex;gap:8px;flex-wrap:wrap}
+  .scen button{font-size:13px;padding:5px 10px}
+  .scen button.on{border-color:var(--s1);color:var(--s1);background:#eef5fd}
+  .legend{display:flex;gap:16px;color:var(--text-2);font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:18px;height:0;border-top:2px solid}
+  .sw.dash{border-top-style:dashed}
+  #chart{position:relative}
+  #chart svg{display:block;width:100%;overflow:visible}
+  .tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.08);white-space:nowrap;display:none;font-variant-numeric:tabular-nums}
+  .tip b{display:block;margin-bottom:2px}
+  .muted{color:var(--text-3);font-size:12px}
+  .result{font-size:15px;margin:2px 0 12px}
+  .result strong{font-variant-numeric:tabular-nums}
+  details{margin-top:6px}
+  summary{cursor:pointer;color:var(--text-2)}
+  textarea{width:100%;height:120px;font-family:ui-monospace,Menlo,monospace;font-size:12px;border:1px solid var(--line);border-radius:7px;padding:8px;margin-top:8px}
+  .row-btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
+  .toast{color:var(--good);font-size:12px}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:10}
+  .modal{background:#fff;border-radius:12px;padding:20px;max-width:360px;width:90%}
+  .modal p{margin:0 0 16px}
+  .modal .row-btns{justify-content:flex-end}
+  @media (max-width:820px){.tiles{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+  .sync{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:#c9c8c3;display:inline-block}
+  .dot.ok{background:var(--good)} .dot.busy{background:#eda100} .dot.err{background:var(--danger)}
+  .modal.wide{max-width:520px}
+  .modal h3{margin:0 0 6px;font-size:16px}
+  .field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:12px;color:var(--text-2)}
+  .field input{width:100%}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .empty{padding:40px 0;text-align:center;color:var(--text-2)}
+  code{background:#f4f4f2;padding:1px 4px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Zack 旅費欠款與還款追蹤</h1>
+      <p class="sub" style="margin:0">新增或刪除欠款項目、登記每月還款，並依每月還款金額預估還清時間。</p>
+    </div>
+    <div class="sync"><span class="dot" id="syncDot"></span><span id="syncText">未設定同步</span>
+      <button id="btnSettings">⚙ 同步設定</button></div>
+  </div>
+
+  <div id="emptyState" class="card empty" style="display:none">
+    尚未載入資料。請按右上角「同步設定」填入 GitHub Token 與資料檔位置。
+  </div>
+
+  <div id="main">
+  <div class="tiles">
+    <div class="tile"><div class="k">欠款總計</div><div class="v" id="tTotal">—</div><div class="n" id="tTotalN"></div></div>
+    <div class="tile"><div class="k">已還金額</div><div class="v" id="tPaid">—</div><div class="n" id="tPaidN"></div></div>
+    <div class="tile"><div class="k">剩餘欠款</div><div class="v" id="tLeft">—</div><div class="n" id="tLeftN"></div></div>
+    <div class="tile"><div class="k">預估還清</div><div class="v" id="tEnd">—</div><div class="n" id="tEndN"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>預估還款時間</h2>
+      <div class="legend">
+        <span><i class="sw" style="border-color:var(--s1)"></i>實際剩餘欠款</span>
+        <span><i class="sw dash" style="border-color:var(--s2)"></i>預估剩餘欠款</span>
+      </div>
+    </div>
+    <div class="plan">
+      <label>每月預計還款（元）<input type="number" id="monthly" min="0" step="500"></label>
+      <label>預估起始月份<input type="month" id="startMonth"></label>
+      <div>
+        <div class="muted" style="margin-bottom:4px">快速比較</div>
+        <div class="scen" id="scen"></div>
+      </div>
+    </div>
+    <div class="result" id="result"></div>
+    <div id="chart"><div class="tip" id="tip"></div></div>
+    <p class="muted" style="margin:8px 0 0">實際線以目前欠款總計扣除每月月底累計還款計算。</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2>欠款項目</h2><span class="muted" id="debtCount"></span></div>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>旅行／項目</th><th class="num">金額（元）</th><th style="width:36px"></th></tr></thead>
+          <tbody id="debtBody"></tbody>
+          <tfoot><tr><td>合計</td><td class="num" id="debtSum"></td><td></td></tr></tfoot>
+        </table>
+      </div>
+      <form class="addrow" id="debtForm">
+        <input id="dName" placeholder="例如：2026/12 河內" required>
+        <input id="dAmt" class="amt" type="number" placeholder="金額" required>
+        <button class="primary" type="submit">新增</button>
+      </form>
+      <p class="muted" style="margin:8px 0 0">輸入負數可記錄扣減。點擊表格內文字可直接修改。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>還款紀錄</h2><span class="muted" id="payCount"></span></div>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>日期</th><th class="num">金額（元）</th><th>備註</th><th style="width:36px"></th></tr></thead>
+          <tbody id="payBody"></tbody>
+          <tfoot><tr><td>合計</td><td class="num" id="paySum"></td><td></td><td></td></tr></tfoot>
+        </table>
+      </div>
+      <form class="addrow" id="payForm">
+        <input id="pDate" type="date" required>
+        <input id="pAmt" class="amt" type="number" placeholder="金額" required>
+        <input id="pNote" placeholder="備註" value="每月轉帳">
+        <button class="primary" type="submit">登記</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>每月還款彙總</h2>
+    <div class="tbl-scroll" style="margin-top:10px">
+      <table>
+        <thead><tr><th>月份</th><th class="num">當月還款</th><th class="num">累計還款</th><th class="num">月底剩餘</th></tr></thead>
+        <tbody id="monthBody"></tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="setBg"><div class="modal wide">
+  <h3>同步設定</h3>
+  <p class="muted" style="margin:0 0 14px">設定只存在這個瀏覽器，不會上傳。每次修改後，網頁會自動把資料 commit 到下面指定的檔案。</p>
+  <label class="field">GitHub Token（fine-grained，只給該 repo 的 Contents 讀寫權限）
+    <input id="cfToken" type="password" placeholder="github_pat_..." autocomplete="off"></label>
+  <div class="two">
+    <label class="field">帳號 owner<input id="cfOwner"></label>
+    <label class="field">資料 repo<input id="cfRepo"></label>
+  </div>
+  <div class="two">
+    <label class="field">分支 branch<input id="cfBranch"></label>
+    <label class="field">資料檔路徑<input id="cfPath"></label>
+  </div>
+  <div class="row-btns" style="justify-content:space-between">
+    <span class="toast" id="cfMsg"></span>
+    <span style="display:flex;gap:8px"><button id="cfCancel">取消</button><button class="primary" id="cfSave">儲存並連線</button></span>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modalBg"><div class="modal"><p id="modalMsg"></p>
+  <div class="row-btns"><button id="mNo">取消</button><button class="primary" id="mYes">確定</button></div></div></div>
+
+<script>
+const CACHE_KEY='zack-debt-cache-v2', CFG_KEY='zack-debt-sync-v2';
+const CFG_DEFAULT={token:'',owner:'fancysr-ux',repo:'forzack',branch:'main',path:'zack-debt-data.json'};
+const $=id=>document.getElementById(id);
+function uid(){return Math.random().toString(36).slice(2,10)}
+function normalize(d){
+  return {updatedAt:d.updatedAt||'',
+    debts:(d.debts||[]).map(x=>({id:x.id||uid(),name:x.name,amount:+x.amount||0})),
+    payments:(d.payments||[]).map(x=>({id:x.id||uid(),date:x.date,amount:+x.amount||0,note:x.note||''})),
+    monthly:d.monthly??5000, startMonth:d.startMonth||''};
+}
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+let CFG={...CFG_DEFAULT,...(lsGet(CFG_KEY)||{})};
+let cache=lsGet(CACHE_KEY);           // {data, sha, dirty}
+let S=cache&&cache.data?normalize(cache.data):null;
+let SHA=cache?cache.sha:null, DIRTY=!!(cache&&cache.dirty);
+
+function toFile(){
+  return {updatedAt:S.updatedAt,monthly:S.monthly,startMonth:S.startMonth||'',
+    debts:S.debts.map(({name,amount})=>({name,amount})),
+    payments:[...S.payments].sort((a,b)=>a.date.localeCompare(b.date)).map(({date,amount,note})=>({date,amount,note}))};
+}
+function persist(){lsSet(CACHE_KEY,{data:S,sha:SHA,dirty:DIRTY})}
+function save(){S.updatedAt=new Date().toISOString();DIRTY=true;persist();scheduleSync()}
+
+// ---------- GitHub sync ----------
+const b64enc=s=>{const b=new TextEncoder().encode(s);let r='';b.forEach(c=>r+=String.fromCharCode(c));return btoa(r)};
+const b64dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g,'')),c=>c.charCodeAt(0)));
+const apiUrl=()=>`https://api.github.com/repos/${encodeURIComponent(CFG.owner)}/${encodeURIComponent(CFG.repo)}/contents/${CFG.path.split('/').map(encodeURIComponent).join('/')}`;
+const hdr=()=>({'Authorization':'Bearer '+CFG.token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'});
+function setSync(state,text){$('syncDot').className='dot '+state;$('syncText').textContent=text}
+
+async function ghGet(){
+  const r=await fetch(apiUrl()+'?ref='+encodeURIComponent(CFG.branch)+'&t='+Date.now(),{headers:hdr(),cache:'no-store'});
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error(r.status===401?'Token 無效或已過期':r.status===403?'Token 權限不足':'讀取失敗 ('+r.status+')');
+  const j=await r.json(); return {data:JSON.parse(b64dec(j.content)),sha:j.sha};
+}
+async function ghPut(){
+  const body={message:'更新還款紀錄 '+new Date().toLocaleString('zh-TW',{hour12:false}),
+    content:b64enc(JSON.stringify(toFile(),null,2)+'\n'),branch:CFG.branch};
+  if(SHA) body.sha=SHA;
+  const r=await fetch(apiUrl(),{method:'PUT',headers:{...hdr(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.status===409||r.status===422){const cur=await ghGet();SHA=cur?cur.sha:null;return ghPut();}
+  if(!r.ok) throw new Error(r.status===401?'Token 無效或已過期':r.status===403||r.status===404?'Token 沒有寫入權限':'寫入失敗 ('+r.status+')');
+  const j=await r.json(); SHA=j.content.sha;
+}
+let syncTimer=null, syncing=false;
+function scheduleSync(){
+  if(!CFG.token){setSync('','僅存在此瀏覽器（未設定同步）');return}
+  setSync('busy','等待同步…');clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,1500);
+}
+async function syncNow(){
+  if(!CFG.token||syncing) return; syncing=true; setSync('busy','同步中…');
+  try{await ghPut();DIRTY=false;persist();setSync('ok','已同步 '+new Date().toLocaleTimeString('zh-TW',{hour12:false}))}
+  catch(e){setSync('err','同步失敗：'+e.message)}
+  finally{syncing=false}
+}
+async function pull(){
+  if(!CFG.token){
+    // 沒有 token：試著讀同站公開的資料檔（唯讀）
+    try{const r=await fetch(CFG.path+'?t='+Date.now(),{cache:'no-store'});
+      if(r.ok){const d=normalize(await r.json());if(!S||(!DIRTY&&d.updatedAt>=(S.updatedAt||''))){S=d;persist()}}}catch(e){}
+    setSync('',S?'唯讀／僅存在此瀏覽器（未設定同步）':'未設定同步');return;
+  }
+  setSync('busy','讀取中…');
+  try{
+    const cur=await ghGet();
+    if(!cur){ if(!S) S=normalize({}); SHA=null; await syncNow(); return; }
+    const remote=normalize(cur.data);
+    if(DIRTY&&S&&(S.updatedAt||'')>(remote.updatedAt||'')){SHA=cur.sha;await syncNow();}
+    else{S=remote;SHA=cur.sha;DIRTY=false;persist();setSync('ok','已同步')}
+  }catch(e){setSync('err',e.message)}
+}
+const fmt=n=>Math.round(n).toLocaleString('zh-TW');
+const ym=d=>d.slice(0,7);
+function addMonths(m,k){let [y,mo]=m.split('-').map(Number);mo+=k;y+=Math.floor((mo-1)/12);mo=((mo-1)%12+12)%12+1;return y+'-'+String(mo).padStart(2,'0')}
+function monthDiff(a,b){const [y1,m1]=a.split('-').map(Number),[y2,m2]=b.split('-').map(Number);return (y2-y1)*12+(m2-m1)}
+const mLabel=m=>{const [y,mo]=m.split('-');return `${y}/${mo}`};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+const thisMonth=()=>todayStr().slice(0,7);
+
+function totals(){
+  const total=S.debts.reduce((a,d)=>a+(+d.amount||0),0);
+  const paid=S.payments.reduce((a,p)=>a+(+p.amount||0),0);
+  return {total,paid,left:total-paid};
+}
+function defaultStart(){
+  const cur=thisMonth();
+  const paidThis=S.payments.some(p=>ym(p.date)===cur);
+  return paidThis?addMonths(cur,1):cur;
+}
+function monthlyHistory(){
+  const {total}=totals();
+  const sorted=[...S.payments].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!sorted.length) return [];
+  const first=ym(sorted[0].date), last=thisMonth()>ym(sorted[sorted.length-1].date)?thisMonth():ym(sorted[sorted.length-1].date);
+  const byM={}; sorted.forEach(p=>{byM[ym(p.date)]=(byM[ym(p.date)]||0)+(+p.amount||0)});
+  const rows=[]; let cum=0;
+  for(let m=first;m<=last;m=addMonths(m,1)){cum+=byM[m]||0;rows.push({m,amt:byM[m]||0,cum,left:total-cum})}
+  return rows;
+}
+function project(left,monthly,start){
+  if(left<=0) return {months:0,end:null,pts:[]};
+  if(!(monthly>0)) return {months:Infinity,end:null,pts:[]};
+  const months=Math.ceil(left/monthly), pts=[]; let bal=left;
+  for(let i=0;i<months;i++){bal=Math.max(0,bal-monthly);pts.push({m:addMonths(start,i),left:bal,amt:Math.min(monthly,bal+monthly)})}
+  return {months,end:addMonths(start,months-1),pts};
+}
+function durText(n){if(!isFinite(n))return '無法還清';const y=Math.floor(n/12),m=n%12;return (y?y+' 年 ':'')+(m?m+' 個月':'')||'0 個月'}
+
+function render(){
+  const {total,paid,left}=totals();
+  const start=S.startMonth||defaultStart();
+  $('monthly').value=S.monthly; $('startMonth').value=start;
+  const pj=project(left,+S.monthly,start);
+
+  $('tTotal').textContent=fmt(total); $('tTotalN').textContent=`${S.debts.length} 個項目`;
+  $('tPaid').textContent=fmt(paid); $('tPaidN').textContent=total>0?`已還 ${(paid/total*100).toFixed(1)}%`:'';
+  $('tLeft').textContent=fmt(left); $('tLeftN').textContent=left<=0?'已全部還清 🎉':`共 ${S.payments.length} 筆還款`;
+  $('tEnd').textContent=left<=0?'已還清':(pj.end?mLabel(pj.end):'—');
+  $('tEndN').textContent=left<=0?'':(isFinite(pj.months)?`再 ${durText(pj.months)}`:'請輸入每月還款');
+
+  $('result').innerHTML=left<=0?'欠款已全部還清。':
+    (isFinite(pj.months)?`每月還 <strong>${fmt(S.monthly)}</strong> 元，從 ${mLabel(start)} 起還 <strong>${pj.months}</strong> 期，預計 <strong>${mLabel(pj.end)}</strong> 還清（約 ${durText(pj.months)}）。最後一期約 ${fmt(left-(pj.months-1)*S.monthly)} 元。`:'請輸入每月還款金額。');
+
+  // scenarios
+  const opts=[5000,7000,10000,15000];
+  $('scen').innerHTML=opts.map(v=>{const p=project(left,v,start);return `<button data-v="${v}" class="${+S.monthly===v?'on':''}">${fmt(v)}／月 → ${p.end?mLabel(p.end):'—'}</button>`}).join('');
+
+  // debts
+  $('debtBody').innerHTML=S.debts.map(d=>`<tr data-id="${d.id}">
+    <td><input class="inline" data-f="name" value="${esc(d.name)}"></td>
+    <td><input class="inline num" type="number" data-f="amount" value="${d.amount}"></td>
+    <td><button class="del" data-del="debt" title="刪除">×</button></td></tr>`).join('');
+  $('debtSum').textContent=fmt(total); $('debtCount').textContent=`${S.debts.length} 項`;
+
+  // payments
+  const ps=[...S.payments].sort((a,b)=>b.date.localeCompare(a.date));
+  $('payBody').innerHTML=ps.map(p=>`<tr data-id="${p.id}">
+    <td><input class="inline" type="date" data-f="date" value="${p.date}"></td>
+    <td><input class="inline num" type="number" data-f="amount" value="${p.amount}"></td>
+    <td><input class="inline" data-f="note" value="${esc(p.note||'')}"></td>
+    <td><button class="del" data-del="pay" title="刪除">×</button></td></tr>`).join('');
+  $('paySum').textContent=fmt(paid); $('payCount').textContent=`${S.payments.length} 筆`;
+
+  const hist=monthlyHistory();
+  $('monthBody').innerHTML=[...hist].reverse().map(r=>`<tr><td>${mLabel(r.m)}</td><td class="num">${r.amt?fmt(r.amt):'<span class="muted">0</span>'}</td><td class="num">${fmt(r.cum)}</td><td class="num">${fmt(r.left)}</td></tr>`).join('');
+
+  drawChart(hist,pj,left);
+}
+
+function niceMax(v){if(v<=0)return 10000;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;const s=n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10;return s*p}
+
+function drawChart(hist,pj,left){
+  const box=$('chart'); const tip=$('tip');
+  box.querySelectorAll('svg').forEach(s=>s.remove());
+  // series: actual = hist (month-end left); projected = last actual point + projection
+  const actual=hist.map(r=>({m:r.m,v:r.left,amt:r.amt}));
+  let proj=[];
+  if(pj.pts.length){
+    const anchorM=addMonths(pj.pts[0].m,-1);
+    proj=[{m:anchorM,v:left,amt:0},...pj.pts.map(p=>({m:p.m,v:p.left,amt:p.amt}))];
+  }
+  const all=[...actual,...proj];
+  if(!all.length){return}
+  const months=[...new Set(all.map(p=>p.m))].sort();
+  const m0=months[0], mN=months[months.length-1], N=Math.max(1,monthDiff(m0,mN));
+  const W=Math.max(320,box.clientWidth), H=320, L=64, R=16, T=14, B=34;
+  const iw=W-L-R, ih=H-T-B;
+  const maxV=niceMax(Math.max(...all.map(p=>p.v)));
+  const x=m=>L+monthDiff(m0,m)/N*iw, y=v=>T+ih-(v/maxV)*ih;
+  const ns='http://www.w3.org/2000/svg';
+  let g='';
+  for(let i=0;i<=4;i++){const v=maxV*i/4,yy=y(v);
+    g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="${i?'#f1f0ec':'#c9c8c3'}" />`;
+    g+=`<text x="${L-8}" y="${yy+4}" text-anchor="end" font-size="11" fill="#8a8984">${v>=10000?(v/10000).toLocaleString('zh-TW',{maximumFractionDigits:1})+' 萬':fmt(v)}</text>`}
+  // x ticks: every n months, labels at January plus ends
+  const step=Math.max(1,Math.ceil(N/(iw/70)));
+  const stepNice=[1,2,3,6,12].find(s=>s>=step)||12;
+  for(let i=0;i<=N;i++){const m=addMonths(m0,i);const mo=+m.slice(5);
+    if((mo-1)%stepNice===0){const xx=x(m);
+      g+=`<line x1="${xx}" x2="${xx}" y1="${T+ih}" y2="${T+ih+4}" stroke="#c9c8c3"/>`;
+      g+=`<text x="${xx}" y="${T+ih+18}" text-anchor="middle" font-size="11" fill="#8a8984">${mo===1?m.slice(0,4):mo+'月'}</text>`}}
+  // today marker
+  const tm=thisMonth();
+  if(tm>=m0&&tm<=mN){const xx=x(tm);g+=`<line x1="${xx}" x2="${xx}" y1="${T}" y2="${T+ih}" stroke="#c9c8c3" stroke-dasharray="2 3"/><text x="${xx+4}" y="${T+10}" font-size="11" fill="#8a8984">本月</text>`}
+  const path=pts=>pts.map((p,i)=>(i?'L':'M')+x(p.m).toFixed(1)+' '+y(p.v).toFixed(1)).join(' ');
+  if(actual.length) g+=`<path d="${path(actual)}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>`;
+  if(proj.length) g+=`<path d="${path(proj)}" fill="none" stroke="var(--s2)" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>`;
+  // end labels
+  if(proj.length){const e=proj[proj.length-1];g+=`<circle cx="${x(e.m)}" cy="${y(0)}" r="4" fill="var(--s2)" stroke="#fff" stroke-width="2"/>`;
+    const anchor=x(e.m)>W-90?'end':'middle';g+=`<text x="${x(e.m)}" y="${y(0)-10}" text-anchor="${anchor}" font-size="12" font-weight="600" fill="#0b0b0b">${mLabel(e.m)} 還清</text>`}
+  if(actual.length){const a=actual[actual.length-1];g+=`<circle cx="${x(a.m)}" cy="${y(a.v)}" r="4" fill="var(--s1)" stroke="#fff" stroke-width="2"/>`}
+  g+=`<line id="xh" y1="${T}" y2="${T+ih}" stroke="#52514e" stroke-width="1" visibility="hidden"/>`;
+  g+=`<circle id="dotA" r="4" fill="var(--s1)" stroke="#fff" stroke-width="2" visibility="hidden"/><circle id="dotP" r="4" fill="var(--s2)" stroke="#fff" stroke-width="2" visibility="hidden"/>`;
+  g+=`<rect id="hit" x="${L}" y="${T}" width="${iw}" height="${ih}" fill="transparent"/>`;
+  const svg=document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('height',H);
+  svg.setAttribute('role','img'); svg.setAttribute('aria-label','剩餘欠款實際與預估走勢圖');
+  svg.innerHTML=g; box.insertBefore(svg,tip);
+  const aMap=Object.fromEntries(actual.map(p=>[p.m,p])), pMap=Object.fromEntries(proj.map(p=>[p.m,p]));
+  const hit=svg.querySelector('#hit'), xh=svg.querySelector('#xh'), dA=svg.querySelector('#dotA'), dP=svg.querySelector('#dotP');
+  hit.addEventListener('mousemove',ev=>{
+    const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)*W/r.width;
+    const i=Math.round((sx-L)/iw*N), m=addMonths(m0,Math.max(0,Math.min(N,i))), xx=x(m);
+    xh.setAttribute('x1',xx);xh.setAttribute('x2',xx);xh.setAttribute('visibility','visible');
+    let html=`<b>${mLabel(m)}</b>`;
+    const a=aMap[m], p=pMap[m]&&!(a&&pMap[m].amt===0)?pMap[m]:null;
+    if(a){dA.setAttribute('cx',xx);dA.setAttribute('cy',y(a.v));dA.setAttribute('visibility','visible');html+=`當月還款 ${fmt(a.amt)}<br>月底剩餘 ${fmt(a.v)}`}else dA.setAttribute('visibility','hidden');
+    if(p){dP.setAttribute('cx',xx);dP.setAttribute('cy',y(p.v));dP.setAttribute('visibility','visible');html+=`預估還款 ${fmt(p.amt)}<br>預估剩餘 ${fmt(p.v)}`}else dP.setAttribute('visibility','hidden');
+    tip.innerHTML=html; tip.style.display='block';
+    const px=xx*r.width/W; const tw=tip.offsetWidth;
+    tip.style.left=Math.min(Math.max(0,px+12),r.width-tw)+'px'; tip.style.top='10px';
+    if(px+12+tw>r.width) tip.style.left=Math.max(0,px-tw-12)+'px';
+  });
+  hit.addEventListener('mouseleave',()=>{tip.style.display='none';[xh,dA,dP].forEach(e=>e.setAttribute('visibility','hidden'))});
+}
+
+// ---------- events ----------
+function renderAll(){
+  const has=!!S;$('main').style.display=has?'':'none';$('emptyState').style.display=has?'none':'';
+  if(has) render();
+}
+$('monthly').addEventListener('input',e=>{S.monthly=Math.max(0,+e.target.value||0);save();const el=e.target,pos=el.selectionStart;render();el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}});
+$('startMonth').addEventListener('change',e=>{S.startMonth=e.target.value||'';save();render()});
+$('scen').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.monthly=+b.dataset.v;save();render()});
+$('debtForm').addEventListener('submit',e=>{e.preventDefault();
+  S.debts.push({id:uid(),name:$('dName').value.trim(),amount:+$('dAmt').value||0});
+  $('dName').value='';$('dAmt').value='';save();render();});
+$('payForm').addEventListener('submit',e=>{e.preventDefault();
+  S.payments.push({id:uid(),date:$('pDate').value,amount:+$('pAmt').value||0,note:$('pNote').value.trim()});
+  $('pAmt').value=S.monthly||'';save();render();});
+$('pDate').value=todayStr();
+document.addEventListener('change',e=>{const inp=e.target.closest('input.inline');if(!inp)return;
+  const tr=inp.closest('tr'),id=tr.dataset.id,f=inp.dataset.f;
+  const list=tr.closest('tbody').id==='debtBody'?S.debts:S.payments;
+  const it=list.find(x=>x.id===id);if(!it)return;
+  it[f]=f==='amount'?(+inp.value||0):inp.value;save();render();});
+
+let pending=null;
+function ask(msg,fn){$('modalMsg').textContent=msg;pending=fn;$('modalBg').style.display='flex'}
+$('mNo').onclick=()=>{$('modalBg').style.display='none';pending=null};
+$('mYes').onclick=()=>{$('modalBg').style.display='none';if(pending)pending();pending=null};
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-del]');if(!b)return;
+  const id=b.closest('tr').dataset.id;
+  if(b.dataset.del==='debt'){const d=S.debts.find(x=>x.id===id);ask(`確定刪除欠款項目「${d.name}」（${fmt(d.amount)} 元）？`,()=>{S.debts=S.debts.filter(x=>x.id!==id);save();render()})}
+  else{const p=S.payments.find(x=>x.id===id);ask(`確定刪除 ${p.date} 的還款 ${fmt(p.amount)} 元？`,()=>{S.payments=S.payments.filter(x=>x.id!==id);save();render()})}
+});
+
+// settings
+function openSettings(){['Token','Owner','Repo','Branch','Path'].forEach(k=>$('cf'+k).value=CFG[k.toLowerCase()]||'');$('cfMsg').textContent='';$('setBg').style.display='flex'}
+$('btnSettings').onclick=openSettings;
+$('cfCancel').onclick=()=>$('setBg').style.display='none';
+$('cfSave').onclick=async()=>{
+  const changedTarget=['owner','repo','branch','path'].some(k=>CFG[k]!==$('cf'+k[0].toUpperCase()+k.slice(1)).value.trim());
+  CFG={token:$('cfToken').value.trim(),owner:$('cfOwner').value.trim(),repo:$('cfRepo').value.trim(),branch:$('cfBranch').value.trim()||'main',path:$('cfPath').value.trim()};
+  lsSet(CFG_KEY,CFG); if(changedTarget){SHA=null;DIRTY=false;}
+  $('setBg').style.display='none'; await pull(); renderAll();
+};
+
+let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(renderAll,150)});
+window.addEventListener('focus',()=>{if(CFG.token&&!DIRTY&&!syncing) pull().then(renderAll)});
+renderAll();
+pull().then(renderAll);
+</script>
+</body>
+</html>
