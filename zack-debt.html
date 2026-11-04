@@ -86,6 +86,10 @@
   .field input{width:100%}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .empty{padding:40px 0;text-align:center;color:var(--text-2)}
+  body.ro .addrow, body.ro button.del, body.ro .edit-hint{display:none}
+  body.ro input.inline{pointer-events:none}
+  .ro-badge{display:none;font-size:12px;color:var(--text-2);background:#f4f4f2;border-radius:6px;padding:2px 8px}
+  body.ro .ro-badge{display:inline-block}
   code{background:#f4f4f2;padding:1px 4px;border-radius:4px;font-size:12px}
 </style>
 </head>
@@ -96,7 +100,7 @@
       <h1>Zack 旅費欠款與還款追蹤</h1>
       <p class="sub" style="margin:0">新增或刪除欠款項目、登記每月還款，並依每月還款金額預估還清時間。</p>
     </div>
-    <div class="sync"><span class="dot" id="syncDot"></span><span id="syncText">未設定同步</span>
+    <div class="sync"><span class="ro-badge">唯讀</span><span class="dot" id="syncDot"></span><span id="syncText">未設定同步</span>
       <button id="btnSettings">⚙ 同步設定</button></div>
   </div>
 
@@ -148,7 +152,7 @@
         <input id="dAmt" class="amt" type="number" placeholder="金額" required>
         <button class="primary" type="submit">新增</button>
       </form>
-      <p class="muted" style="margin:8px 0 0">輸入負數可記錄扣減。點擊表格內文字可直接修改。</p>
+      <p class="muted edit-hint" style="margin:8px 0 0">輸入負數可記錄扣減。點擊表格內文字可直接修改。</p>
     </div>
 
     <div class="card">
@@ -227,7 +231,7 @@ function toFile(){
     payments:[...S.payments].sort((a,b)=>a.date.localeCompare(b.date)).map(({date,amount,note})=>({date,amount,note}))};
 }
 function persist(){lsSet(CACHE_KEY,{data:S,sha:SHA,dirty:DIRTY})}
-function save(){S.updatedAt=new Date().toISOString();DIRTY=true;persist();scheduleSync()}
+function save(){if(!CFG.token) return; S.updatedAt=new Date().toISOString();DIRTY=true;persist();scheduleSync()}
 
 // ---------- GitHub sync ----------
 const b64enc=s=>{const b=new TextEncoder().encode(s);let r='';b.forEach(c=>r+=String.fromCharCode(c));return btoa(r)};
@@ -266,8 +270,8 @@ async function pull(){
   if(!CFG.token){
     // 沒有 token：試著讀同站公開的資料檔（唯讀）
     try{const r=await fetch(CFG.path+'?t='+Date.now(),{cache:'no-store'});
-      if(r.ok){const d=normalize(await r.json());if(!S||(!DIRTY&&d.updatedAt>=(S.updatedAt||''))){S=d;persist()}}}catch(e){}
-    setSync('',S?'唯讀／僅存在此瀏覽器（未設定同步）':'未設定同步');return;
+      if(r.ok){S=normalize(await r.json());DIRTY=false;persist()}}catch(e){}
+    setSync('',S?'檢視模式（設定 Token 後可編輯）':'未設定同步');return;
   }
   setSync('busy','讀取中…');
   try{
@@ -337,17 +341,17 @@ function render(){
 
   // debts
   $('debtBody').innerHTML=S.debts.map(d=>`<tr data-id="${d.id}">
-    <td><input class="inline" data-f="name" value="${esc(d.name)}"></td>
-    <td><input class="inline num" type="number" data-f="amount" value="${d.amount}"></td>
+    <td><input class="inline" ${CFG.token?"":"readonly"} data-f="name" value="${esc(d.name)}"></td>
+    <td><input class="inline num" ${CFG.token?"":"readonly"} type="number" data-f="amount" value="${d.amount}"></td>
     <td><button class="del" data-del="debt" title="刪除">×</button></td></tr>`).join('');
   $('debtSum').textContent=fmt(total); $('debtCount').textContent=`${S.debts.length} 項`;
 
   // payments
   const ps=[...S.payments].sort((a,b)=>b.date.localeCompare(a.date));
   $('payBody').innerHTML=ps.map(p=>`<tr data-id="${p.id}">
-    <td><input class="inline" type="date" data-f="date" value="${p.date}"></td>
-    <td><input class="inline num" type="number" data-f="amount" value="${p.amount}"></td>
-    <td><input class="inline" data-f="note" value="${esc(p.note||'')}"></td>
+    <td><input class="inline" ${CFG.token?"":"readonly"} type="date" data-f="date" value="${p.date}"></td>
+    <td><input class="inline num" ${CFG.token?"":"readonly"} type="number" data-f="amount" value="${p.amount}"></td>
+    <td><input class="inline" ${CFG.token?"":"readonly"} data-f="note" value="${esc(p.note||'')}"></td>
     <td><button class="del" data-del="pay" title="刪除">×</button></td></tr>`).join('');
   $('paySum').textContent=fmt(paid); $('payCount').textContent=`${S.payments.length} 筆`;
 
@@ -426,6 +430,7 @@ function drawChart(hist,pj,left){
 
 // ---------- events ----------
 function renderAll(){
+  document.body.classList.toggle('ro',!CFG.token);
   const has=!!S;$('main').style.display=has?'':'none';$('emptyState').style.display=has?'none':'';
   if(has) render();
 }
