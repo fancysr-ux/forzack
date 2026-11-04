@@ -1,0 +1,123 @@
+# 欠款資料有新增／刪除時，寄 email 通知
+# 放在「資料 repo」（放 zack-debt-data.json 的那個 repo）的 .github/workflows/notify.yml
+name: 欠款更新通知
+
+on:
+  push:
+    paths:
+      - zack-debt-data.json
+
+concurrency:
+  group: debt-notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 比對變更並寄信
+        env:
+          MAIL_TO: fancysr@gmail.com;ggtboy12345tw@gmail.com   # 多個信箱用 ; 或 , 分隔
+          PAGE_URL: https://fancysr-ux.github.io/forzack/zack-debt.html
+          DATA_PATH: zack-debt-data.json
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_APP_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, smtplib, math, sys
+          from collections import Counter
+          from datetime import datetime, timezone, timedelta
+          from email.mime.text import MIMEText
+          from email.header import Header
+
+          PATH = os.environ.get("DATA_PATH", "zack-debt-data.json")
+          BEFORE, AFTER = os.environ.get("BEFORE", ""), os.environ.get("AFTER", "HEAD")
+
+          def load(rev):
+              if not rev or set(rev) == {"0"}:
+                  return None
+              try:
+                  return json.loads(subprocess.check_output(["git", "show", f"{rev}:{PATH}"]).decode("utf-8"))
+              except subprocess.CalledProcessError:
+                  return None
+
+          old, new = load(BEFORE), load(AFTER)
+          if new is None:
+              sys.exit("找不到新版資料檔")
+          old = old or {"debts": [], "payments": []}
+
+          dkey = lambda d: (d["name"], int(d["amount"]))
+          pkey = lambda p: (p["date"], int(p["amount"]), p.get("note", ""))
+          def diff(a, b, key):
+              ca, cb = Counter(map(key, a)), Counter(map(key, b))
+              return list((cb - ca).elements()), list((ca - cb).elements())
+          d_add, d_del = diff(old.get("debts", []), new["debts"], dkey)
+          p_add, p_del = diff(old.get("payments", []), new["payments"], pkey)
+          if not (d_add or d_del or p_add or p_del):
+              print("欠款與還款沒有變動，不寄信"); sys.exit(0)
+
+          fmt = lambda n: f"{int(round(n)):,}"
+          total = sum(int(d["amount"]) for d in new["debts"])
+          paid = sum(int(p["amount"]) for p in new["payments"])
+          left = total - paid
+          monthly = int(new.get("monthly") or 0)
+          now = datetime.now(timezone(timedelta(hours=8)))
+          cur = now.strftime("%Y-%m")
+          def add_m(ym, k):
+              y, m = map(int, ym.split("-")); m += k - 1
+              return f"{y + m // 12}-{m % 12 + 1:02d}"
+          start = new.get("startMonth") or (add_m(cur, 1) if any(p["date"][:7] == cur for p in new["payments"]) else cur)
+          if left <= 0:
+              payoff = "已全部還清 🎉"
+          elif monthly > 0:
+              n = math.ceil(left / monthly)
+              payoff = f"{add_m(start, n - 1).replace('-', '/')}（每月 {fmt(monthly)} 元，還需 {n} 期）"
+          else:
+              payoff = "未設定每月還款"
+
+          parts = []
+          if p_add: parts.append(f"新增還款 {fmt(sum(x[1] for x in p_add))} 元")
+          if d_add: parts.append(f"新增花費 {fmt(sum(x[1] for x in d_add))} 元")
+          if (d_del or p_del) and not parts: parts.append("刪除／修改項目")
+          subject = f"【Zack 欠款】{'、'.join(parts)}｜剩餘 {fmt(left)} 元"
+
+          def rows(items, cols):
+              return "".join("<tr>" + "".join(f'<td style="padding:4px 10px;border-bottom:1px solid #eee;{"text-align:right" if isinstance(c, int) else ""}">{fmt(c) if isinstance(c, int) else c}</td>' for c in it) + "</tr>" for it in items)
+          def section(title, items, color):
+              if not items: return ""
+              return f'<h3 style="font-size:15px;margin:18px 0 6px;color:{color}">{title}</h3><table style="border-collapse:collapse;font-size:14px">{rows(items, None)}</table>'
+
+          page = os.environ.get("PAGE_URL", "")
+          html = f"""<div style="font-family:-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;color:#0b0b0b;max-width:560px">
+          <h2 style="font-size:18px;margin:0 0 4px">Zack 欠款紀錄有更新</h2>
+          <div style="color:#8a8984;font-size:12px">{now.strftime('%Y/%m/%d %H:%M')}</div>
+          {section('➕ 新增還款', p_add, '#008300')}
+          {section('➕ 新增花費', d_add, '#c8352f')}
+          {section('➖ 移除的還款', p_del, '#8a8984')}
+          {section('➖ 移除的花費', d_del, '#8a8984')}
+          <table style="border-collapse:collapse;font-size:14px;margin-top:20px;border-top:2px solid #0b0b0b">
+          <tr><td style="padding:6px 10px">欠款總計</td><td style="padding:6px 10px;text-align:right">{fmt(total)}</td></tr>
+          <tr><td style="padding:6px 10px">已還金額</td><td style="padding:6px 10px;text-align:right">{fmt(paid)}</td></tr>
+          <tr><td style="padding:6px 10px;font-weight:700">剩餘欠款</td><td style="padding:6px 10px;text-align:right;font-weight:700">{fmt(left)}</td></tr>
+          <tr><td style="padding:6px 10px">預估還清</td><td style="padding:6px 10px;text-align:right">{payoff}</td></tr>
+          </table>
+          {f'<p style="margin-top:20px"><a href="{page}">打開追蹤頁</a></p>' if page else ''}
+          </div>"""
+
+          import re
+          user, pw = os.environ["MAIL_USERNAME"], os.environ["MAIL_APP_PASSWORD"]
+          to = [a.strip() for a in re.split(r"[;,]", os.environ["MAIL_TO"]) if a.strip()]
+          msg = MIMEText(html, "html", "utf-8")
+          msg["Subject"] = Header(subject, "utf-8"); msg["From"] = user; msg["To"] = ", ".join(to)
+          if os.environ.get("DRY_RUN"):
+              print("收件人:", to); print(subject); print(html); sys.exit(0)
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+              s.login(user, pw.replace(" ", "")); s.sendmail(user, to, msg.as_string())
+          print("已寄出：", subject)
+          PY
